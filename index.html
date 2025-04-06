@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Block Breaker</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #111;
+      color: white;
+      text-align: center;
+    }
+
+    canvas {
+      background: #000;
+      display: block;
+      margin: 20px auto;
+      border: 2px solid white;
+    }
+
+    #info {
+      margin-top: 10px;
+    }
+
+    #restartBtn {
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 18px;
+      display: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧱 Block Breaker</h1>
+  <div id="info">
+    Score: <span id="score">0</span> |
+    Lives: <span id="lives">3</span> |
+    Stage: <span id="stage">1</span>
+  </div>
+  <canvas id="gameCanvas" width="480" height="320"></canvas>
+  <button id="restartBtn">Restart</button>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreEl = document.getElementById("score");
+    const livesEl = document.getElementById("lives");
+    const stageEl = document.getElementById("stage");
+    const restartBtn = document.getElementById("restartBtn");
+
+    let stage = 1;
+    let score = 0;
+    let lives = 3;
+    let isGameOver = false;
+    let isWin = false;
+
+    const paddle = {
+      width: 100,
+      height: 10,
+      x: (canvas.width - 100) / 2,
+      speed: 5,
+      dx: 0,
+    };
+
+    const ball = {
+      x: canvas.width / 2,
+      y: canvas.height - 30,
+      dx: 2,
+      dy: -2,
+      size: 10,
+    };
+
+    const block = {
+      row: 4,
+      col: 6,
+      width: 50,
+      height: 20,
+      padding: 10,
+      offsetTop: 30,
+      offsetLeft: 30,
+    };
+
+    let blocks = [];
+
+    function createBlocks() {
+      const rows = block.row + stage; // More rows per stage
+      const cols = block.col + Math.floor(stage / 2); // Slightly more columns
+      blocks = [];
+      for (let r = 0; r < rows; r++) {
+        blocks[r] = [];
+        for (let c = 0; c < cols; c++) {
+          blocks[r][c] = { x: 0, y: 0, destroyed: false };
+        }
+      }
+    }
+
+    function drawPaddle() {
+      ctx.fillStyle = "#00f";
+      ctx.fillRect(paddle.x, canvas.height - paddle.height, paddle.width, paddle.height);
+    }
+
+    function drawBall() {
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.size, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function drawBlocks() {
+      for (let r = 0; r < blocks.length; r++) {
+        for (let c = 0; c < blocks[r].length; c++) {
+          if (!blocks[r][c].destroyed) {
+            const bX = c * (block.width + block.padding) + block.offsetLeft;
+            const bY = r * (block.height + block.padding) + block.offsetTop;
+            blocks[r][c].x = bX;
+            blocks[r][c].y = bY;
+            ctx.fillStyle = "#f00";
+            ctx.fillRect(bX, bY, block.width, block.height);
+          }
+        }
+      }
+    }
+
+    function movePaddle() {
+      paddle.x += paddle.dx;
+      if (paddle.x < 0) paddle.x = 0;
+      if (paddle.x + paddle.width > canvas.width) paddle.x = canvas.width - paddle.width;
+    }
+
+    function resetBallAndPaddle() {
+      ball.x = canvas.width / 2;
+      ball.y = canvas.height - 30;
+      ball.dx = 2 + stage * 0.5;
+      ball.dy = -2 - stage * 0.3;
+      paddle.x = (canvas.width - paddle.width) / 2;
+    }
+
+    function checkWin() {
+      return blocks.flat().every(b => b.destroyed);
+    }
+
+    function drawMessage(msg) {
+      ctx.fillStyle = "#fff";
+      ctx.font = "24px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawPaddle();
+      drawBall();
+      drawBlocks();
+      movePaddle();
+
+      if (!isGameOver && !isWin) {
+        ball.x += ball.dx;
+        ball.y += ball.dy;
+
+        if (ball.x + ball.size > canvas.width || ball.x - ball.size < 0) ball.dx = -ball.dx;
+        if (ball.y - ball.size < 0) ball.dy = -ball.dy;
+
+        if (
+          ball.y + ball.size > canvas.height - paddle.height &&
+          ball.x > paddle.x &&
+          ball.x < paddle.x + paddle.width
+        ) {
+          ball.dy = -ball.dy;
+        }
+
+        for (let r = 0; r < blocks.length; r++) {
+          for (let c = 0; c < blocks[r].length; c++) {
+            const b = blocks[r][c];
+            if (!b.destroyed) {
+              if (
+                ball.x > b.x &&
+                ball.x < b.x + block.width &&
+                ball.y > b.y &&
+                ball.y < b.y + block.height
+              ) {
+                ball.dy = -ball.dy;
+                b.destroyed = true;
+                score += 10;
+                scoreEl.textContent = score;
+              }
+            }
+          }
+        }
+
+        if (checkWin()) {
+          isWin = true;
+          drawMessage("You Win!");
+          setTimeout(() => {
+            stage++;
+            stageEl.textContent = stage;
+            isWin = false;
+            createBlocks();
+            resetBallAndPaddle();
+            draw(); // ← ここを追加：次のステージへ進む！
+          }, 2000);
+          return;
+        }
+
+        if (ball.y + ball.size > canvas.height) {
+          lives--;
+          livesEl.textContent = lives;
+          if (lives <= 0) {
+            isGameOver = true;
+            restartBtn.style.display = "inline-block";
+          } else {
+            resetBallAndPaddle();
+          }
+        }
+      } else if (isGameOver) {
+        drawMessage("Game Over!");
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") paddle.dx = -paddle.speed;
+      else if (e.key === "ArrowRight") paddle.dx = paddle.speed;
+    });
+
+    document.addEventListener("keyup", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") paddle.dx = 0;
+    });
+
+    restartBtn.addEventListener("click", () => {
+      location.reload();
+    });
+
+    createBlocks();
+    resetBallAndPaddle();
+    draw();
+  </script>
+</body>
+</html>
